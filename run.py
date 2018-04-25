@@ -66,14 +66,16 @@ if __name__ == "__main__":
 
     rw = ResultWriter(config)
 
-    with open(config.input_fpath) as fin:
+    last_intent = None
+
+    with open(config.input_fpath, encoding='utf-8') as fin:
         for line in fin:
             line_seg = line.strip().split("\t")
 
             if len(line_seg) > 1:
                 id, text, context = line_seg
                 # 首先使用三层规则匹配
-                intent, pattern = rule_matcher.match(text)
+                intent, pattern = rule_matcher.match(text, last_intent)
                 # 使用Bi-LSTM模型匹配
                 if intent is None:
                     intent = bi_lstm.predict_intent(text, context)
@@ -89,7 +91,10 @@ if __name__ == "__main__":
                     slots = bi_lstm.extract_non_slot(text)
 
                 rw.save_line(id, text, intent, slots)
+                if intent != 'OTHERS':
+                    last_intent = intent
 
             else:
                 rw.save_blank_line()
+                last_intent = None
 
