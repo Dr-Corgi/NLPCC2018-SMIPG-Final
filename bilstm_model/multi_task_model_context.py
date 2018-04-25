@@ -20,11 +20,12 @@ from tensorflow.contrib.rnn import static_rnn
 from tensorflow.contrib.rnn import static_bidirectional_rnn
 
 
-class MultiTaskModel(object):
+class MultiTaskModelContext(object):
     def __init__(self,
                  source_vocab_size,
                  tag_vocab_size,
                  label_vocab_size,
+                 context_vocab_size,
                  buckets,
                  word_embedding_size,
                  size,
@@ -41,6 +42,7 @@ class MultiTaskModel(object):
         self.source_vocab_size = source_vocab_size
         self.tag_vocab_size = tag_vocab_size
         self.label_vocab_size = label_vocab_size
+        self.context_vocab_size = context_vocab_size
         self.word_embedding_size = word_embedding_size
         self.cell_size = size
         self.num_layers = num_layers
@@ -68,8 +70,14 @@ class MultiTaskModel(object):
         self.cell_fw = create_cell()
         self.cell_bw = create_cell()
 
+        # context cell
+        self.context_cell_fw = create_cell()
+        self.context_cell_bw = create_cell()
+
         # Feeds for inputs.
         self.encoder_inputs = []
+        # context
+        self.context_inputs = []
         self.tags = []
         self.tag_weights = []
         self.labels = []
@@ -79,6 +87,11 @@ class MultiTaskModel(object):
         for i in xrange(buckets[-1][0]):
             self.encoder_inputs.append(tf.placeholder(tf.int32, shape=[None],
                                                       name="encoder{0}".format(i)))
+
+        for i in xrange(buckets[-1][0]):
+            self.context_inputs.append(tf.placeholder(tf.int32, shape=[None],
+                                                      name="context_encoder{0}".format(i)))
+
         for i in xrange(buckets[-1][1]):
             self.tags.append(tf.placeholder(tf.float32, shape=[None],
                                             name="tag{0}".format(i)))
@@ -87,7 +100,7 @@ class MultiTaskModel(object):
         self.labels.append(tf.placeholder(tf.float32, shape=[None], name="label"))
 
         base_rnn_output = self.generate_rnn_output()
-        encoder_outputs, encoder_state, attention_states = base_rnn_output
+        encoder_outputs, encoder_state, attention_states, context_outputs, context_state = base_rnn_output
 
         if task['tagging'] == 1:
             seq_labeling_outputs = seq_labeling.generate_sequence_output(
@@ -103,8 +116,9 @@ class MultiTaskModel(object):
                 use_attention=use_attention)
             self.tagging_output, self.tagging_loss = seq_labeling_outputs
         if task['intent'] == 1:
-            seq_intent_outputs = seq_classification.generate_single_output(
+            seq_intent_outputs = seq_classification.generate_single_output_context(
                 encoder_state,
+                context_state,
                 attention_states,
                 self.sequence_length,
                 self.labels,
@@ -158,13 +172,40 @@ class MultiTaskModel(object):
                                                        encoder_emb_inputs,
                                                        sequence_length=self.sequence_length,
                                                        dtype=tf.float32)
+
                 encoder_outputs, encoder_state_fw, encoder_state_bw = rnn_outputs
+
+                # context
+                with tf.variable_scope("context"):
+                    context_embedding = tf.get_variable("context_embedding",
+                                                        [self.context_vocab_size,
+                                                         self.word_embedding_size])
+                    context_encoder_emb_inputs = list()
+                    context_encoder_emb_inputs = [tf.nn.embedding_lookup(context_embedding, context_input) \
+                                                  for context_input in self.context_inputs]
+                    context_rnn_outputs = static_bidirectional_rnn(self.context_cell_fw,
+                                                                   self.context_cell_bw,
+                                                                   context_encoder_emb_inputs,
+                                                                   sequence_length=self.sequence_length,
+                                                                   dtype=tf.float32)
+
+                    context_encoder_outputs, context_encoder_state_fw, context_encoder_state_bw = context_rnn_outputs
+
+                    context_state_fw = context_encoder_state_fw[-1]
+                    context_state_bw = context_encoder_state_bw[-1]
+                    context_encoder_state = tf.concat([tf.concat(context_state_fw, 1),
+                                                       tf.concat(context_state_bw, 1)], 1)
+
+
                 # with state_is_tuple = True, if num_layers > 1,
                 # here we simply use the state from last layer as the encoder state
                 state_fw = encoder_state_fw[-1]
                 state_bw = encoder_state_bw[-1]
                 encoder_state = tf.concat([tf.concat(state_fw, 1),
                                            tf.concat(state_bw, 1)], 1)
+
+
+
                 top_states = [tf.reshape(e, [-1, 1, self.cell_fw.output_size \
                                              + self.cell_bw.output_size])
                               for e in encoder_outputs]
@@ -181,6 +222,22 @@ class MultiTaskModel(object):
                                          sequence_length=self.sequence_length,
                                          dtype=tf.float32)
                 encoder_outputs, encoder_state = rnn_outputs
+
+                # context
+                with tf.variable_scope("context"):
+                    context_embedding = tf.get_variable("context_embedding",
+                                                        [self.context_vocab_size,
+                                                         self.word_embedding_size])
+                    context_encoder_emb_inputs = list()
+                    context_encoder_emb_inputs = [tf.nn.embedding_lookup(context_embedding, context_input) \
+                                                  for context_input in self.context_inputs]
+
+                    context_rnn_outputs = static_rnn(self.context_cell_fw,
+                                                     context_encoder_emb_inputs,
+                                                     sequence_length=self.sequence_length,
+                                                     dtype=tf.float32)
+                    context_encoder_outputs, context_encoder_state = context_rnn_outputs
+
                 # with state_is_tuple = True, if num_layers > 1,
                 # here we use the state from last layer as the encoder state
                 state = encoder_state[-1]
@@ -188,9 +245,9 @@ class MultiTaskModel(object):
                 top_states = [tf.reshape(e, [-1, 1, self.cell_fw.output_size])
                               for e in encoder_outputs]
                 attention_states = tf.concat(top_states, 1)
-            return encoder_outputs, encoder_state, attention_states
+            return encoder_outputs, encoder_state, attention_states, context_encoder_outputs, context_encoder_state
 
-    def joint_step(self, session, encoder_inputs, tags, tag_weights,
+    def joint_step(self, session, encoder_inputs, context_inputs, tags, tag_weights,
                    labels, batch_sequence_length,
                    bucket_id, forward_only):
         """Run a step of the joint model feeding the given inputs.
@@ -233,6 +290,9 @@ class MultiTaskModel(object):
             input_feed[self.tags[l].name] = tags[l]
             input_feed[self.tag_weights[l].name] = tag_weights[l]
         input_feed[self.labels[0].name] = labels[0]
+
+        for l in xrange(50):
+            input_feed[self.context_inputs[l].name] = context_inputs[l]
 
         # Output feed: depends on whether we do a backward step or not.
         if not forward_only:
@@ -293,6 +353,7 @@ class MultiTaskModel(object):
             input_feed[self.tags[l].name] = tags[l]
             input_feed[self.tag_weights[l].name] = tag_weights[l]
 
+
         # Output feed: depends on whether we do a backward step or not.
         if not forward_only:
             output_feed = [self.update,  # Update Op that does SGD.
@@ -311,7 +372,7 @@ class MultiTaskModel(object):
         else:
             return None, outputs[0], outputs[1:1+tag_size]
 
-    def classification_step(self, session, encoder_inputs, labels,
+    def classification_step(self, session, encoder_inputs, context_inputs, labels,
                             batch_sequence_length, bucket_id, forward_only):
         """Run a step of the intent classification model feeding the given inputs.
 
@@ -342,6 +403,8 @@ class MultiTaskModel(object):
         input_feed[self.sequence_length.name] = batch_sequence_length
         for l in xrange(encoder_size):
             input_feed[self.encoder_inputs[l].name] = encoder_inputs[l]
+        for l in xrange(50):
+            input_feed[self.context_inputs[l].name] = context_inputs[l]
         input_feed[self.labels[0].name] = labels[0]
 
         # Output feed: depends on whether we do a backward step or not.
@@ -378,19 +441,26 @@ class MultiTaskModel(object):
           the constructed batch that has the proper format to call step(...) later.
         """
         encoder_size, decoder_size = self.buckets[bucket_id]
-        encoder_inputs, decoder_inputs, labels = [], [], []
+        encoder_inputs, context_inputs, decoder_inputs, labels = [], [], [], []
 
         # Get a random batch of encoder and decoder inputs from data,
         # pad them if needed, reverse encoder inputs and add GO to decoder.
         batch_sequence_length_list= list()
+        context_batch_sequence_length_list = list()
+
         for _ in xrange(self.batch_size):
-            encoder_input, decoder_input, label = random.choice(data[bucket_id])
+            encoder_input, decoder_input, label, context = random.choice(data[bucket_id])
             batch_sequence_length_list.append(len(encoder_input))
+            context_batch_sequence_length_list.append(len(context))
 
             # Encoder inputs are padded and then reversed.
             encoder_pad = [data_utils.PAD_ID] * (encoder_size - len(encoder_input))
             #encoder_inputs.append(list(reversed(encoder_input + encoder_pad)))
             encoder_inputs.append(list(encoder_input + encoder_pad))
+
+            # Context
+            context_pad = [data_utils.PAD_ID] * (50 - len(context))
+            context_inputs.append(list(context_pad + context))
 
             # Decoder inputs get an extra "GO" symbol, and are padded then.
             decoder_pad_size = decoder_size - len(decoder_input)
@@ -400,6 +470,7 @@ class MultiTaskModel(object):
 
         # Now we create batch-major vectors from the data selected above.
         batch_encoder_inputs = []
+        batch_context_inputs = []
         batch_decoder_inputs = []
         batch_weights = []
         batch_labels = []
@@ -408,6 +479,12 @@ class MultiTaskModel(object):
         for length_idx in xrange(encoder_size):
             batch_encoder_inputs.append(
                 np.array([encoder_inputs[batch_idx][length_idx]
+                          for batch_idx in xrange(self.batch_size)], dtype=np.int32))
+
+        # Context
+        for length_idx in xrange(50):
+            batch_context_inputs.append(
+                np.array([context_inputs[batch_idx][length_idx]
                           for batch_idx in xrange(self.batch_size)], dtype=np.int32))
 
         # Batch decoder inputs are re-indexed decoder_inputs, we create weights.
@@ -432,7 +509,7 @@ class MultiTaskModel(object):
                       for batch_idx in xrange(self.batch_size)], dtype=np.int32))
 
         batch_sequence_length = np.array(batch_sequence_length_list, dtype=np.int32)
-        return (batch_encoder_inputs, batch_decoder_inputs, batch_weights,
+        return (batch_encoder_inputs, batch_context_inputs, batch_decoder_inputs, batch_weights,
                 batch_sequence_length, batch_labels)
 
 
@@ -453,19 +530,25 @@ class MultiTaskModel(object):
           the constructed batch that has the proper format to call step(...) later.
         """
         encoder_size, decoder_size = self.buckets[bucket_id]
-        encoder_inputs, decoder_inputs, labels = [], [], []
+        encoder_inputs, decoder_inputs, labels, context_inputs = [], [], [], []
 
         # Get a random batch of encoder and decoder inputs from data,
         # pad them if needed, reverse encoder inputs and add GO to decoder.
         batch_sequence_length_list= list()
+        context_batch_sequence_length_list = list()
         #for _ in xrange(self.batch_size):
-        encoder_input, decoder_input, label = data[bucket_id][sample_id]
+        encoder_input, decoder_input, label, context = data[bucket_id][sample_id]
         batch_sequence_length_list.append(len(encoder_input))
+        context_batch_sequence_length_list.append(len(context))
 
         # Encoder inputs are padded and then reversed.
         encoder_pad = [data_utils.PAD_ID] * (encoder_size - len(encoder_input))
         #encoder_inputs.append(list(reversed(encoder_input + encoder_pad)))
         encoder_inputs.append(list(encoder_input + encoder_pad))
+
+        # Context
+        context_pad = [data_utils.PAD_ID] * (50 - len(context))
+        context_inputs.append(list(context_pad + context))
 
         # Decoder inputs get an extra "GO" symbol, and are padded then.
         decoder_pad_size = decoder_size - len(decoder_input)
@@ -475,6 +558,7 @@ class MultiTaskModel(object):
 
         # Now we create batch-major vectors from the data selected above.
         batch_encoder_inputs = []
+        batch_context_inputs = []
         batch_decoder_inputs = []
         batch_weights = []
         batch_labels = []
@@ -484,6 +568,12 @@ class MultiTaskModel(object):
             batch_encoder_inputs.append(
                 np.array([encoder_inputs[batch_idx][length_idx]
                           for batch_idx in xrange(1)], dtype=np.int32))
+
+        # Context
+        for length_idx in xrange(50):
+            batch_context_inputs.append(
+                np.array([context_inputs[batch_idx][length_idx]
+                        for batch_idx in xrange(1)], dtype=np.int32))
 
         # Batch decoder inputs are re-indexed decoder_inputs, we create weights.
         for length_idx in xrange(decoder_size):
@@ -508,5 +598,5 @@ class MultiTaskModel(object):
                       for batch_idx in xrange(1)], dtype=np.int32))
 
         batch_sequence_length = np.array(batch_sequence_length_list, dtype=np.int32)
-        return (batch_encoder_inputs, batch_decoder_inputs, batch_weights,
+        return (batch_encoder_inputs, batch_context_inputs, batch_decoder_inputs, batch_weights,
                 batch_sequence_length, batch_labels)

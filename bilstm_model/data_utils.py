@@ -1,12 +1,4 @@
 # -*- coding: utf-8 -*-
-"""
-Created on Sat Feb 27 09:33:32 2016
-
-@author: Bing Liu (liubing@cmu.edu)
-
-Prepare data for multi-task RNN model.
-"""
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -202,6 +194,7 @@ def create_label_vocab(vocabulary_path, data_path):
         for k in label_list:
           vocab_file.write(k + "\n")
 
+
 def prepare_multi_task_data(data_dir, in_vocab_size, out_vocab_size):
     train_path = data_dir + '/train/train'
     dev_path = data_dir + '/valid/valid'
@@ -286,3 +279,121 @@ def prepare_multi_task_data(data_dir, in_vocab_size, out_vocab_size):
             (in_seq_dev_ids_path, out_seq_dev_ids_path, label_dev_ids_path),
             (in_seq_test_ids_path, out_seq_test_ids_path, label_test_ids_path),
             (in_vocab_path, out_vocab_path, label_path)]
+
+
+def prepare_multi_task_data_context(data_dir, in_vocab_size, out_vocab_size, context_vocab_size=10000):
+    train_path = data_dir + '/train/train'
+    dev_path = data_dir + '/valid/valid'
+    test_path = data_dir + '/test/test'
+
+    # Create vocabularies of the appropriate sizes.
+    in_vocab_path = os.path.join(data_dir, "in_vocab_%d.txt" % in_vocab_size)
+    out_vocab_path = os.path.join(data_dir, "out_vocab_%d.txt" % out_vocab_size)
+    # context
+    context_vocab_path = os.path.join(data_dir, "context_vocab_%d.txt" % context_vocab_size)
+    label_path = os.path.join(data_dir, "label.txt")
+
+    create_vocabulary(in_vocab_path,
+                      train_path + ".seq.in",
+                      in_vocab_size,
+                      tokenizer=naive_tokenizer)
+    create_vocabulary(out_vocab_path,
+                      train_path + ".seq.out",
+                      out_vocab_size,
+                      tokenizer=naive_tokenizer)
+    # context
+    create_vocabulary(context_vocab_path,
+                      train_path + ".context",
+                      context_vocab_size,
+                      tokenizer=naive_tokenizer
+                      )
+    create_label_vocab(label_path, train_path + ".label")
+
+    # Create token ids for the training data.
+    in_seq_train_ids_path = train_path + (".ids%d.seq.in" % in_vocab_size)
+    out_seq_train_ids_path = train_path + (".ids%d.seq.out" % out_vocab_size)
+    # context
+    context_seq_train_ids_path = train_path + (".ids%d.context" % context_vocab_size)
+    label_train_ids_path = train_path + (".ids.label")
+
+    data_to_token_ids(train_path + ".seq.in",
+                      in_seq_train_ids_path,
+                      in_vocab_path,
+                      tokenizer=naive_tokenizer)
+    data_to_token_ids(train_path + ".seq.out",
+                      out_seq_train_ids_path,
+                      out_vocab_path,
+                      tokenizer=naive_tokenizer)
+    # context
+    data_to_token_ids(train_path + ".context",
+                      context_seq_train_ids_path,
+                      context_vocab_path,
+                      tokenizer=naive_tokenizer)
+
+    data_to_token_ids(train_path + ".label",
+                      label_train_ids_path,
+                      label_path,
+                      tokenizer=naive_tokenizer,
+                      normalize_digits=False,
+                      use_padding=False)
+
+    # Create token ids for the development data.
+    in_seq_dev_ids_path = dev_path + (".ids%d.seq.in" % in_vocab_size)
+    out_seq_dev_ids_path = dev_path + (".ids%d.seq.out" % out_vocab_size)
+    # context
+    context_seq_dev_ids_path = dev_path + (".ids%d.context" % context_vocab_size)
+    label_dev_ids_path = dev_path + (".ids.label")
+
+    data_to_token_ids(dev_path + ".seq.in",
+                      in_seq_dev_ids_path,
+                      in_vocab_path,
+                      tokenizer=naive_tokenizer)
+    data_to_token_ids(dev_path + ".seq.out",
+                      out_seq_dev_ids_path,
+                      out_vocab_path,
+                      tokenizer=naive_tokenizer)
+    # context
+    data_to_token_ids(dev_path + ".context",
+                      context_seq_dev_ids_path,
+                      context_vocab_path,
+                      tokenizer=naive_tokenizer)
+
+    data_to_token_ids(dev_path + ".label",
+                      label_dev_ids_path,
+                      label_path,
+                      tokenizer=naive_tokenizer,
+                      normalize_digits=False,
+                      use_padding=False)
+
+    # Create token ids for the test data.
+    in_seq_test_ids_path = test_path + (".ids%d.seq.in" % in_vocab_size)
+    out_seq_test_ids_path = test_path + (".ids%d.seq.out" % out_vocab_size)
+    # context
+    context_seq_test_ids_path = test_path + (".ids%d.context" % context_vocab_size)
+    label_test_ids_path = test_path + (".ids.label")
+
+    data_to_token_ids(test_path + ".seq.in",
+                      in_seq_test_ids_path,
+                      in_vocab_path,
+                      tokenizer=naive_tokenizer)
+    data_to_token_ids(test_path + ".seq.out",
+                      out_seq_test_ids_path,
+                      out_vocab_path,
+                      tokenizer=naive_tokenizer)
+    # context
+    data_to_token_ids(test_path + ".context",
+                      context_seq_test_ids_path,
+                      context_vocab_path,
+                      tokenizer=naive_tokenizer)
+
+    data_to_token_ids(test_path + ".label",
+                      label_test_ids_path,
+                      label_path,
+                      tokenizer=naive_tokenizer,
+                      normalize_digits=False,
+                      use_padding=False)
+
+    return [(in_seq_train_ids_path, out_seq_train_ids_path, label_train_ids_path, context_seq_train_ids_path),
+            (in_seq_dev_ids_path, out_seq_dev_ids_path, label_dev_ids_path, context_seq_dev_ids_path),
+            (in_seq_test_ids_path, out_seq_test_ids_path, label_test_ids_path, context_seq_test_ids_path),
+            (in_vocab_path, out_vocab_path, label_path, context_vocab_path)]
