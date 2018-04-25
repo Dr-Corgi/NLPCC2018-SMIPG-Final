@@ -1,0 +1,7 @@
+.idea/*
+.DS_Store
+data/*
+result/*
+bilstm_model/model/*
+bilstm_model/data/*
+__init__.py
