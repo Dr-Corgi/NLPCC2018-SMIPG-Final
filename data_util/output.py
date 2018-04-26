@@ -1,16 +1,6 @@
 from data_util.preprocessor import whitespece_segment
 import re
 
-def save_output(fout, id, text, intent, slots):
-    fout.write(id)
-    fout.write("\t")
-    fout.write(text)
-    fout.write("\t")
-    fout.write(intent)
-    fout.write("\t")
-    fout.write(" ".join(slots))
-    fout.write("\n")
-
 class ResultWriter(object):
 
     def __init__(self, config):
@@ -128,38 +118,6 @@ class ResultWriter(object):
         return slot_text, need_fix_flag
 
     def save_line(self, id, text, intent, slots):
-
-        '''
-        slot_text = []
-        words = whitespece_segment(text).split(" ")
-        slot_name = ""
-
-        flag = 0
-        need_fix_flag = False
-
-        for i in range(len(words)):
-            if slots[i] == 'O' and slot_name != '':
-                if flag == 1:
-                    slot_text.append("</" + slot_name + ">")
-                slot_text.append(words[i])
-                flag = 0
-            elif slots[i] != 'O':
-                if slots[i][0] == 'B':
-                    if flag == 1 and slot_name != "" and intent != slots[i][2:]:
-                        slot_text.append('</' + slot_name + '>')
-                    flag = 1
-                    slot_name = slots[i][2:]
-                    slot_text.append('<'+slot_name+">")
-                slot_text.append(words[i])
-                if (i == 0 and slots[i][0] == 'I') or (i > 0 and slots[i][0] == 'I' and slots[i-1] == 'O'):
-                    need_fix_flag = True
-            elif slots[i] == 'O':
-                slot_text.append(words[i])
-
-        if flag != 0:
-            slot_text.append('</'+slot_name+'>')
-        '''
-
         slot_text, need_fix_flag = self.slot_format(text, intent, slots)
 
         if need_fix_flag:

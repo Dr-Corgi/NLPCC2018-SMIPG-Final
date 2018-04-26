@@ -12,10 +12,12 @@ from data_util.preprocessor import whitespece_segment
 class Config():
 
     # Configuration for Rule_Matcher
-    jieba_user_dict = "./rule_model/user_dict.txt"
-    keywords_dict = "./rule_model/keywords_dict.txt"
+    jieba_user_dict = "./dicts/user_dict.txt"
     song_list = "./dicts/song.txt"
     singer_list = "./dicts/singer.txt"
+    keywords_dict = "./rule_model/keyword.json"
+    command_json_path = "./rule_model/command.json"
+    ngram_json_path = "./rule_model/ngram.json"
 
     # Configuration for BiLSTM_Model
     non_context_bilstm_data_path = "./bilstm_model/data/non-context"
@@ -57,7 +59,7 @@ if __name__ == "__main__":
         print("Invalid Model Type. Must be one of [non-context, single_context, fully_context].")
         exit(1)
 
-    rule_matcher = RuleMatcher(config.jieba_user_dict, config.keywords_dict, config.song_list)
+    rule_matcher = RuleMatcher(config.jieba_user_dict, config.keywords_dict, config.command_json_path, config.ngram_json_path, config.song_list)
 
     if config.model_type == "non-context":
         bi_lstm = BiLSTMModel(config.non_context_bilstm_data_path, config.non_context_bilstm_model_path)
@@ -68,7 +70,7 @@ if __name__ == "__main__":
 
     last_intent = None
 
-    with open(config.input_fpath, encoding='utf-8') as fin:
+    with open(config.input_fpath) as fin:
         for line in fin:
             line_seg = line.strip().split("\t")
 
