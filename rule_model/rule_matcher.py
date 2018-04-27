@@ -46,19 +46,19 @@ class RuleMatcher(object):
         intent, pattern = self.sentence_match(text)
 
         if intent is None:
-            intent, pattern = self.cancel_match(text, last_intent)
+            intent, pattern = self.song_match(text)
 
         if intent is None:
-            intent, pattern = self.ngram_match(text)
+            intent, pattern = self.keywords_match(text)
 
         if intent is None:
             intent, pattern = self.number_match(text)
 
         if intent is None:
-            intent, pattern = self.song_match(text)
+            intent, pattern = self.cancel_match(text, last_intent)
 
         if intent is None:
-            intent, pattern = self.keywords_match(text)
+            intent, pattern = self.ngram_match(text)
 
         return intent, pattern
 

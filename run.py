@@ -24,14 +24,14 @@ class Config():
     non_context_bilstm_model_path = "./bilstm_model/model/non-context"
     context_bilstm_data_path = "./bilstm_model/data/context"
     context_bilstm_model_path = "./bilstm_model/model/context"
-    modes = ["non-context", "single_context", "fully_context"]
-    model_type = "non-context"
+    modes = ["non-context", "context"]
+    model_type = "context"
 
     # Input files
-    input_fpath = "./data/corpus.test.context.txt"
+    input_fpath = "./data/corpus.test.task4-subtask4-result1.txt"
 
     # Output files
-    output_fpath = "./result/output.txt"
+    output_fpath = "./result/task4-subtask4-result1.txt"
 
     slot_intents = ["music.play", "navigation.navigation","phone_call.make_a_phone_call"]
 
@@ -56,7 +56,7 @@ if __name__ == "__main__":
     config = Config()
 
     if config.model_type not in config.modes:
-        print("Invalid Model Type. Must be one of [non-context, single_context, fully_context].")
+        print("Invalid Model Type. Must be one of [non-context, context].")
         exit(1)
 
     rule_matcher = RuleMatcher(config.jieba_user_dict, config.keywords_dict, config.command_json_path, config.ngram_json_path, config.song_list)
@@ -71,6 +71,7 @@ if __name__ == "__main__":
     last_intent = None
 
     with open(config.input_fpath) as fin:
+        counter = 0
         for line in fin:
             line_seg = line.strip().split("\t")
 
@@ -95,6 +96,11 @@ if __name__ == "__main__":
                 rw.save_line(id, text, intent, slots)
                 if intent != 'OTHERS':
                     last_intent = intent
+
+                counter += 1
+
+                if counter % 1000 == 0:
+                    print("Done processing %d lines." % counter)
 
             else:
                 rw.save_blank_line()

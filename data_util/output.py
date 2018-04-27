@@ -81,7 +81,8 @@ class ResultWriter(object):
             slots = fixed_slots
 
         else:
-            print(text + '\t' + intent + '\t' + " ".join(slots))
+            # print(text + '\t' + intent + '\t' + " ".join(slots))
+            pass
 
         return self.slot_format(text, intent, slots)
 

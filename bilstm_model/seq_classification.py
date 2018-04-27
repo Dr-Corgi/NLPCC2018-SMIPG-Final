@@ -127,6 +127,7 @@ def generate_single_output(encoder_state, attention_states, sequence_length,
 
   return bucket_outputs, loss
 
+
 def attention_single_context_output_decoder(initial_state,
                                     context_state,
                                     attention_states,
@@ -135,6 +136,7 @@ def attention_single_context_output_decoder(initial_state,
                                     dtype=tf.float32,
                                     scope=None,
                                     sequence_length=tf.ones([16]),
+                                    context_length=tf.ones([16]),
                                     initial_state_attention=True,
                                     use_attention=False):
     if num_heads < 1:
@@ -192,14 +194,46 @@ def attention_single_context_output_decoder(initial_state,
                     ds.append(tf.reshape(d, [-1, attn_size]))
             return attn_weights, ds
 
+        def attention_context(query, use_attention=False):
+            """Put attention masks on hidden using hidden_features and query."""
+            attn_weights = []
+            ds = []  # Results of attention reads will be stored here.
+            for i in xrange(num_heads):
+                with tf.variable_scope("Attention_context_%d" % i):
+                    # y = linear(query, attention_vec_size, True)
+                    y = linear(query, attention_vec_size, True)
+                    y = tf.reshape(y, [-1, 1, 1, attention_vec_size])
+                    # Attention mask is a softmax of v^T * tanh(...).
+                    s = tf.reduce_sum(
+                        v[i] * tf.tanh(hidden_features[i] + y), [2, 3])
+                    if use_attention is False:  # apply mean pooling
+                        weights = tf.tile(context_length, tf.stack([attn_length]))
+                        weights = tf.reshape(weights, tf.shape(s))
+                        a = tf.ones(tf.shape(s), dtype=dtype) / tf.to_float(weights)
+                        # a = tf.ones(tf.shape(s), dtype=dtype) / tf.to_float(tf.shape(s)[1])
+                    else:
+                        a = tf.nn.softmax(s)
+                    attn_weights.append(a)
+                    # Now calculate the attention-weighted vector d.
+                    d = tf.reduce_sum(
+                        tf.reshape(a, [-1, attn_length, 1, 1]) * hidden,
+                        [1, 2])
+                    ds.append(tf.reshape(d, [-1, attn_size]))
+            return attn_weights, ds
+
         batch_attn_size = tf.stack([batch_size, attn_size])
         attns = [tf.zeros(batch_attn_size, dtype=dtype)
                  for _ in xrange(num_heads)]
         for a in attns:  # Ensure the second shape of attention vectors is set.
             a.set_shape([None, attn_size])
         if initial_state_attention:
-            combine_state = tf.concat([initial_state, context_state], 1)
-            attn_weights, attns = attention(combine_state, use_attention=use_attention)
+            # combine_state = tf.concat([initial_state, context_state], 1)
+            # attn_weights, attns = attention(combine_state, use_attention=use_attention)
+
+            init_attn_weights, init_attns = attention(initial_state, use_attention=use_attention)
+            cont_attn_weights, cont_attns = attention_context(context_state, use_attention=use_attention)
+            attns = tf.concat([init_attns, cont_attns], 0)
+            attn_weights = init_attn_weights
 
         # with variable_scope.variable_scope(scope or "Linear"):
         matrix = tf.get_variable("Out_Matrix", [attn_size, output_size])
@@ -213,8 +247,9 @@ def attention_single_context_output_decoder(initial_state,
     # NOTE: here we temporarily assume num_head = 1
     return attention_states, attn_weights[0], attns[0], [output]
 
+
 def generate_single_output_context(encoder_state, context_state, attention_states,
-                                   sequence_length, targets, num_classes, buckets,
+                                   sequence_length, context_length, targets, num_classes, buckets,
                                    use_mean_attention=False,
                                    softmax_loss_function=None,
                                    per_example_loss=False,
@@ -228,6 +263,7 @@ def generate_single_output_context(encoder_state, context_state, attention_state
                                                              output_size=num_classes,
                                                              num_heads=1,
                                                              sequence_length=sequence_length,
+                                                             context_length=context_length,
                                                              use_attention=use_attention)
             _, _, _, bucket_outputs = single_outputs
 

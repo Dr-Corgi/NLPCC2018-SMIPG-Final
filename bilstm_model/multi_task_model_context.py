@@ -83,6 +83,8 @@ class MultiTaskModelContext(object):
         self.labels = []
         self.sequence_length = tf.placeholder(tf.int32, [None],
                                               name="sequence_length")
+        self.context_length = tf.placeholder(tf.int32, [None],
+                                             name="context_length")
 
         for i in xrange(buckets[-1][0]):
             self.encoder_inputs.append(tf.placeholder(tf.int32, shape=[None],
@@ -121,6 +123,7 @@ class MultiTaskModelContext(object):
                 context_state,
                 attention_states,
                 self.sequence_length,
+                self.context_length,
                 self.labels,
                 self.label_vocab_size,
                 buckets,
@@ -248,7 +251,7 @@ class MultiTaskModelContext(object):
             return encoder_outputs, encoder_state, attention_states, context_encoder_outputs, context_encoder_state
 
     def joint_step(self, session, encoder_inputs, context_inputs, tags, tag_weights,
-                   labels, batch_sequence_length,
+                   labels, batch_sequence_length, batch_context_length,
                    bucket_id, forward_only):
         """Run a step of the joint model feeding the given inputs.
 
@@ -285,6 +288,7 @@ class MultiTaskModelContext(object):
 
         input_feed = {}
         input_feed[self.sequence_length.name] = batch_sequence_length
+        input_feed[self.context_length.name] = batch_context_length
         for l in xrange(encoder_size):
             input_feed[self.encoder_inputs[l].name] = encoder_inputs[l]
             input_feed[self.tags[l].name] = tags[l]

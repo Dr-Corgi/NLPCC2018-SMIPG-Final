@@ -174,7 +174,7 @@ class BiLSTMModelContext(object):
         words = context_text.strip().split(" ")
         context_input = [self.context_vocab.get(w, 1) for w in words]
         context_pad = [0] * (FLAGS.max_sequence_length - len(context_input))
-        context_inputs.append(list(context_pad+context_input))
+        context_inputs.append(list(context_input+context_pad))
 
         sequence_lens = [len(input_text.strip().split(" "))]
         context_sequence_lens = [len(context_text.strip().split(" "))]
@@ -247,6 +247,7 @@ class BiLSTMModelContext(object):
                                              tag_weights=batch_weights,
                                              labels=batch_labels,
                                              batch_sequence_length=batch_sequence_length,
+                                             batch_context_length=batch_sequence_length,
                                              bucket_id=0,
                                              forward_only=True)
 
@@ -269,6 +270,7 @@ class BiLSTMModelContext(object):
                                              tag_weights=batch_weights,
                                              labels=batch_labels,
                                              batch_sequence_length=batch_sequence_length,
+                                             batch_context_length=batch_sequence_length,
                                              bucket_id=0,
                                              forward_only=True)
 

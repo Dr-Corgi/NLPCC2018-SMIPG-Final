@@ -1,6 +1,6 @@
 
 def construct_context(fin_path="../data/corpus.test.nolabel.txt",
-                      fout_path="../data/corpus.test.context.txt"):
+                      fout_path="../data/corpus.test.task4-subtask4-result1.txt"):
 
     last_line = ""
 
