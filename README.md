@@ -2,7 +2,8 @@
 SMIPG队伍参加[NLPCC2018 Task4](http://tcci.ccf.org.cn/conference/2018/cfpt.php)的代码。  
 
 ## 运行方法
-首先下载训练好的Bi-LSTM模型。将模型放入路径 bilstm_model/ 中。  
+首先下载训练好的Bi-LSTM模型。将模型放入路径 bilstm_model/ 中。   
+
 下载链接：[百度网盘](https://pan.baidu.com/s/12Rq5dCl_TUyJ5S89D4Z4qg)  
 提取码：gkuj  
 
